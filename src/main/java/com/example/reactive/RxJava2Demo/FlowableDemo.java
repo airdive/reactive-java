@@ -4,6 +4,7 @@ import io.reactivex.*;
 import io.reactivex.annotations.NonNull;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.functions.Consumer;
+import io.reactivex.functions.Function;
 import io.reactivex.schedulers.Schedulers;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
@@ -80,7 +81,7 @@ public class FlowableDemo {
      * 不会抛出MissingBackpressureException异常，但会导致OOM。
      */
     @Test
-    public void demo_buffer() {
+    public void flowable_buffer() {
         Flowable
                 .create(new FlowableOnSubscribe<Integer>() {
                     @Override
@@ -119,7 +120,7 @@ public class FlowableDemo {
      *
      */
     @Test
-    public void demo_error() {
+    public void flowable_error() {
         Flowable
                 .create(new FlowableOnSubscribe<Integer>() {
                     @Override
@@ -162,7 +163,7 @@ public class FlowableDemo {
      * 如果Flowable的异步缓存池满了，会丢掉上游发送的数据。
      */
     @Test
-    public void demo_drop() {
+    public void flowable_drop() {
         Flowable
                 .create(new FlowableOnSubscribe<Integer>() {
                     @Override
@@ -213,7 +214,7 @@ public class FlowableDemo {
      * 不管缓存池的状态如何，LATEST都会将最后一条数据强行放入缓存池中。
      */
     @Test
-    public void demo_latest() {
+    public void flowable_latest() {
         Flowable
                 .create(new FlowableOnSubscribe<Integer>() {
                     @Override
@@ -269,7 +270,7 @@ public class FlowableDemo {
      *
      */
     @Test
-    public void demo_missing() {
+    public void flowable_missing() {
         Flowable
                 .create(new FlowableOnSubscribe<Integer>() {
                     @Override
@@ -322,7 +323,7 @@ public class FlowableDemo {
      * onBackpressureDrop
      */
     @Test
-    public void demo_onBackpressureDrop() {
+    public void flowable_onBackpressureDrop() {
         Flowable.range(0, 500)
                 .onBackpressureDrop()
 //                .subscribeOn(Schedulers.newThread())
@@ -340,7 +341,7 @@ public class FlowableDemo {
      * onBackpressureDrop
      */
     @Test
-    public void demo_onBackpressureDrop1() {
+    public void flowable_onBackpressureDrop1() {
         Flowable.range(0, 200)
 //                .onBackpressureBuffer()
                 .onBackpressureLatest()
@@ -375,7 +376,7 @@ public class FlowableDemo {
      * 设置request
      */
     @Test
-    public void demo_request() {
+    public void flowable_request() {
         Flowable
                 .create(new FlowableOnSubscribe<Integer>() {
                     @Override
@@ -416,7 +417,7 @@ public class FlowableDemo {
      * e.requested()随着下游接收数据而递减
      */
     @Test
-    public void demo_buffer_request() {
+    public void flowable_buffer_request() {
         Flowable
                 .create(new FlowableOnSubscribe<Integer>() {
                     @Override
@@ -458,7 +459,7 @@ public class FlowableDemo {
      * 设置ERROR时,下游需求跟不上缓存池存入速度，最终异步缓存池超限，会导致MissingBackpressureException异常。
      */
     @Test
-    public void demo_error_request() {
+    public void flowable_error_request() {
         Flowable
                 .create(new FlowableOnSubscribe<Integer>() {
                     @Override
@@ -499,7 +500,7 @@ public class FlowableDemo {
      * Observable，内存占用暴增
      */
     @Test
-    public void demo_observable_oom() {
+    public void flowable_observable_oom() {
         Observable
                 .create(new ObservableOnSubscribe<Integer>() {
                     @Override
@@ -540,7 +541,7 @@ public class FlowableDemo {
      * 自定义背压策略
      */
     @Test
-    public void demo_custom_strategy() {
+    public void flowable_custom_strategy() {
         Flowable
                 .create(new FlowableOnSubscribe<Integer>() {
                     @Override
@@ -581,6 +582,218 @@ public class FlowableDemo {
 
                     @Override
                     public void onComplete() {
+                    }
+                });
+    }
+
+    /**
+     * BUFFER
+     *
+     */
+    @Test
+    public void flowable_buffer_map() {
+        Flowable
+                .create(new FlowableOnSubscribe<Integer>() {
+                    @Override
+                    public void subscribe(FlowableEmitter<Integer> e) throws Exception {
+                        String threadName = Thread.currentThread().getName();
+                        for (int i = 1; i < 130; i++) {
+                            System.out.println(threadName+"发射---->" + i);
+                            e.onNext(i);
+                        }
+                        e.onComplete();
+                    }
+                }, BackpressureStrategy.BUFFER) //设置背压策略
+                .map(new Function<Integer, String>() {
+                    @Override
+                    public String apply(Integer integer) throws Exception {
+                        System.out.println(Thread.currentThread().getName()+"处理---"+integer);
+                        return " : "+integer;
+                    }
+                })
+//                .subscribeOn(Schedulers.newThread())
+                .observeOn(Schedulers.newThread())
+                .subscribe(new Subscriber<String>() {
+                    @Override
+                    public void onSubscribe(Subscription s) {   //onSubscribe回调的参数不是Disposable而是Subscription
+                        s.request(Long.MAX_VALUE);            //设置观察者最多能处理的消息数
+                    }
+                    @Override
+                    public void onNext(String str) {
+                        System.out.println("接收----> " + str);
+                    }
+                    @Override
+                    public void onError(Throwable t) {
+                    }
+                    @Override
+                    public void onComplete() {
+                        System.out.println("接收----> 完成");
+                    }
+                });
+    }
+
+
+    /**
+     *
+     */
+    @Test
+    public void flowable_onBack() {
+        Flowable
+                .create(new FlowableOnSubscribe<Integer>() {
+                    @Override
+                    public void subscribe(FlowableEmitter<Integer> e) throws Exception {
+                        int i = 0;
+                        while (true) {
+                            Thread.sleep(100);
+                            System.out.println("发射---->" + i);
+                            i++;
+                            e.onNext(i);
+                        }
+                    }
+                }, BackpressureStrategy.MISSING)
+                .onBackpressureDrop()
+                .observeOn(Schedulers.newThread())
+                .subscribe(new Subscriber<Integer>() {
+                    private Subscription subscription;
+
+                    @Override
+                    public void onSubscribe(Subscription s) {
+                        s.request(1);            //设置初始请求数据量为1
+                        subscription = s;
+                    }
+
+                    @Override
+                    public void onNext(Integer integer) {
+                        try {
+                            Thread.sleep(500);
+                            System.out.println("接收----------->" + integer);
+                            subscription.request(1);//每接收到一条数据增加一条请求量
+                        } catch (InterruptedException ignore) {
+                        }
+                    }
+
+                    @Override
+                    public void onError(Throwable t) {
+                    }
+
+                    @Override
+                    public void onComplete() {
+                    }
+                });
+    }
+
+
+    @Test
+    public void flowable_range_onBack() {
+        Flowable
+                .range(1,650)
+                .onBackpressureDrop()
+//                .subscribeOn(Schedulers.newThread())
+//                .observeOn(Schedulers.newThread())
+                .subscribe(new Subscriber<Integer>() {
+                    private Subscription subscription;
+                    @Override
+                    public void onSubscribe(Subscription s) {
+                        s.request(1);            //设置初始请求数据量为1
+                        subscription = s;
+                    }
+                    @Override
+                    public void onNext(Integer integer) {
+                        try {
+                            Thread.sleep(500);
+                            System.out.println("接收----------->" + integer);
+                            subscription.request(1);//每接收到一条数据增加一条请求量
+                        } catch (InterruptedException ignore) {
+                            ignore.printStackTrace();
+                        }
+                    }
+                    @Override
+                    public void onError(Throwable t) {
+                    }
+
+                    @Override
+                    public void onComplete() {
+                    }
+                });
+    }
+
+    /**
+     *
+     * @throws InterruptedException
+     */
+    @Test
+    public void flowable_fromCallable() throws InterruptedException {
+        Flowable.fromCallable(() -> {
+            System.out.println(Thread.currentThread().getName()+"-----发射");
+            Thread.sleep(1000); //  imitate expensive computation
+            return "Done";
+        })
+                .subscribeOn(Schedulers.io())
+                .observeOn(Schedulers.single())
+                .subscribe(new FlowableSubscriber<String>() {
+                    @Override
+                    public void onSubscribe(Subscription s) {
+                        s.request(Long.MAX_VALUE);
+                    }
+
+                    @Override
+                    public void onNext(String s) {
+                        System.out.println(Thread.currentThread().getName()+"处理-----"+s);
+                    }
+
+                    @Override
+                    public void onError(Throwable t) {
+                        t.printStackTrace();
+                    }
+
+                    @Override
+                    public void onComplete() {
+                        System.out.println(Thread.currentThread().getName()+"处理完成");
+                    }
+                });
+
+        Thread.sleep(2000);
+    }
+
+
+    /**
+     * 使用FlowableSubscriber作为订阅者
+     */
+    @Test
+    public void flowable_FlowableSubscriber() {
+        Flowable
+                .create(new FlowableOnSubscribe<Integer>() {
+                    @Override
+                    public void subscribe(FlowableEmitter<Integer> e) throws Exception {
+                        String threadName = Thread.currentThread().getName();
+                        for (int i = 1; i < 130; i++) {
+                            System.out.println(threadName+"发射---->" + i);
+                            e.onNext(i);
+                        }
+                        e.onComplete();
+                    }
+                }, BackpressureStrategy.BUFFER) //设置背压策略
+                .subscribeOn(Schedulers.io())
+                .observeOn(Schedulers.newThread())
+                .subscribe(new FlowableSubscriber<Integer>() {
+                    @Override
+                    public void onSubscribe(Subscription s) {
+                        s.request(Long.MAX_VALUE);
+                    }
+
+                    @Override
+                    public void onNext(Integer integer) {
+                        System.out.println(Thread.currentThread().getName()+"处理-----"+integer);
+                    }
+
+                    @Override
+                    public void onError(Throwable t) {
+                        t.printStackTrace();
+                    }
+
+                    @Override
+                    public void onComplete() {
+                        System.out.println(Thread.currentThread().getName()+"处理完成");
                     }
                 });
     }

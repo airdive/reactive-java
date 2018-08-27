@@ -1,223 +1,88 @@
 package com.example.reactive.RxJava2Demo;
 
-import io.reactivex.*;
+import com.example.reactive.RxJava2Demo.exception.TestException;
+import io.reactivex.Maybe;
+import io.reactivex.MaybeEmitter;
+import io.reactivex.MaybeObserver;
+import io.reactivex.MaybeOnSubscribe;
 import io.reactivex.disposables.Disposable;
+import io.reactivex.disposables.Disposables;
+import io.reactivex.functions.Cancellable;
 import io.reactivex.functions.Function;
 import io.reactivex.schedulers.Schedulers;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
-import org.reactivestreams.Publisher;
-import org.reactivestreams.Subscriber;
+
+import static org.junit.Assert.assertTrue;
 
 /**
- * @description : TODO
+ * @description : Maybe测试
  * @author: liuchuang
- * @date: 2018/8/26 下午11:34
+ * @date: 2018/8/27 下午4:56
  * @modified by:
  */
 @Slf4j
-public class SingleCompletableMaybeDemo {
+public class MaybeDemo {
 
     /**
-     * Single
-     * 只发射一条单一的数据，或者一条异常通知，不能发射完成通知，其中数据与通知只能发射一个。
-     *
-     * Completable
-     * 只发射一条完成通知，或者一条异常通知，不能发射数据，其中完成通知与异常通知只能发射一个
-     *
-     * Maybe
-     * 可发射一条单一的数据，以及发射一条完成通知，或者一条异常通知，其中完成通知和异常通知只
-     * 能发射一个，发射数据只能在发射完成通知或者异常通知之前，否则发射数据无效。
+     * Maybe的API除了几个有限的timeout()，都不支持为被观察者设置Scheduler
      *
      */
 
-    /**
-     *
-     */
-    @Test
-    public void single_success() {
-        Single
-                .create(new SingleOnSubscribe<Integer>() {
-                    @Override
-                    public void subscribe(SingleEmitter<Integer> e) throws Exception {
-                        e.onSuccess(0);
-                    }
-                })
-                .subscribe(new SingleObserver<Integer>() {
-                    @Override
-                    public void onSubscribe(Disposable d) {
-
-                    }
-
-                    @Override
-                    public void onSuccess(Integer integer) {
-                        System.out.println("接收-----"+integer);
-                    }
-
-                    @Override
-                    public void onError(Throwable e) {
-                        e.printStackTrace();
-                    }
-                });
-    }
-
-
-    @Test
-    public void single_error() {
-        Single
-                .create(new SingleOnSubscribe<Integer>() {
-                    @Override
-                    public void subscribe(SingleEmitter<Integer> e) throws Exception {
-                        e.onError(new Exception("测试异常"));
-                    }
-                })
-                .subscribe(new SingleObserver<Integer>() {
-                    @Override
-                    public void onSubscribe(Disposable d) {
-
-                    }
-
-                    @Override
-                    public void onSuccess(Integer integer) {
-                        System.out.println(integer);
-                    }
-
-                    @Override
-                    public void onError(Throwable e) {
-                        System.out.println("异常通知");
-                        e.printStackTrace();
-                    }
-                });
-    }
-
-    @Test
-    public void single_scheduler() {
-        Single
-                .create(new SingleOnSubscribe<Integer>() {
-                    @Override
-                    public void subscribe(SingleEmitter<Integer> e) throws Exception {
-                        e.onSuccess(0);
-                    }
-                })
-                .observeOn(Schedulers.newThread())
-                .map(new Function<Integer, Integer>() {
-                    @Override
-                    public Integer apply(Integer integer) throws Exception {
-                        System.out.println(Thread.currentThread().getName()+"处理-----"+integer);
-                        return integer+1;
-                    }
-                })
-                .observeOn(Schedulers.newThread())
-                .subscribe(new SingleObserver<Integer>() {
-                    @Override
-                    public void onSubscribe(Disposable d) {
-
-                    }
-
-                    @Override
-                    public void onSuccess(Integer integer) {
-                        System.out.println(Thread.currentThread().getName()+"接收-----"+integer);
-                    }
-
-                    @Override
-                    public void onError(Throwable e) {
-                        e.printStackTrace();
-                    }
-                });
-    }
 
     /**
-     * 发射完成消息
+     * onSuccess会多次发射，只有第一次有效
      */
     @Test
-    public void completable_complete() {
-        Completable
-                .create(new CompletableOnSubscribe() {
-                    @Override
-                    public void subscribe(CompletableEmitter e) throws Exception {
-                        e.onComplete();
-                    }
-                })
-                .subscribe(new CompletableObserver() {
-                    @Override
-                    public void onSubscribe(Disposable d) {
+    public void basic() {
+        final Disposable d = Disposables.empty();
 
-                    }
+        Maybe.create(new MaybeOnSubscribe<Integer>() {
+            @Override
+            public void subscribe(MaybeEmitter<Integer> e) throws Exception {
+                e.setDisposable(d);
 
-                    @Override
-                    public void onComplete() {
-                        System.out.println("执行完成");
-                    }
+                e.onSuccess(1);
+                e.onSuccess(3);
+                e.onError(new TestException());
+                log.info(Thread.currentThread().getName()+": "+System.currentTimeMillis());
+                e.onSuccess(2);
+                e.onError(new TestException());
+                e.onComplete();
+            }
+        })
+                .test()
+                .assertResult(1);
 
-                    @Override
-                    public void onError(Throwable e) {
-                        e.printStackTrace();
-                    }
-                });
+        assertTrue(d.isDisposed());
     }
 
-
-    /**
-     * 发射异常通知
-     */
     @Test
-    public void completable_error() {
-        Completable
-                .create(new CompletableOnSubscribe() {
-                    @Override
-                    public void subscribe(CompletableEmitter e) throws Exception {
-                        e.onError(new Exception("测试异常"));
-                    }
-                })
-                .subscribe(new CompletableObserver() {
-                    @Override
-                    public void onSubscribe(Disposable d) {
+    public void basicWithCancellable() {
+        final Disposable d1 = Disposables.empty();
+        final Disposable d2 = Disposables.empty();
 
-                    }
-
+        Maybe.create(new MaybeOnSubscribe<Integer>() {
+            @Override
+            public void subscribe(MaybeEmitter<Integer> e) throws Exception {
+                e.setDisposable(d1);
+                d1.dispose();
+                e.setCancellable(new Cancellable() {
                     @Override
-                    public void onComplete() {
-                        System.out.println("执行完成");
-                    }
-
-                    @Override
-                    public void onError(Throwable e) {
-                        System.out.println("异常通知");
-                        e.printStackTrace();
+                    public void cancel() throws Exception {
+                        d2.dispose();
                     }
                 });
-    }
 
+                e.onSuccess(1);
+                e.onError(new TestException());
+                e.onSuccess(2);
+                e.onError(new TestException());
+            }
+        }).test().assertResult(1);
 
-    /**
-     *
-     */
-    @Test
-    public void completable_scheduler() {
-        Completable
-                .create(new CompletableOnSubscribe() {
-                    @Override
-                    public void subscribe(CompletableEmitter e) throws Exception {
-                        e.onComplete();
-                    }
-                })
-                .observeOn(Schedulers.computation())
-                .subscribe(new CompletableObserver() {
-                    @Override
-                    public void onSubscribe(Disposable d) {
-
-                    }
-
-                    @Override
-                    public void onComplete() {
-                        System.out.println(Thread.currentThread().getName()+"执行完成");
-                    }
-
-                    @Override
-                    public void onError(Throwable e) {
-                        e.printStackTrace();
-                    }
-                });
+        assertTrue(d1.isDisposed());
+        assertTrue(d2.isDisposed());
     }
 
     /**
@@ -344,6 +209,7 @@ public class SingleCompletableMaybeDemo {
                         e.onSuccess(1);
                     }
                 })
+                .subscribeOn(Schedulers.newThread())
                 .observeOn(Schedulers.computation())
                 .map(new Function<Integer, Integer>() {
                     @Override
@@ -382,14 +248,13 @@ public class SingleCompletableMaybeDemo {
      */
     @Test
     public void maybe_success_throw() {
-        Maybe
-                .create(new MaybeOnSubscribe<Integer>() {
-                    @Override
-                    public void subscribe(MaybeEmitter<Integer> e) throws Exception {
-                        System.out.println(Thread.currentThread().getName()+"发射-->"+1);
-                        e.onSuccess(1);
-                    }
-                })
+        Maybe.create(new MaybeOnSubscribe<Integer>() {
+            @Override
+            public void subscribe(MaybeEmitter<Integer> e) throws Exception {
+                System.out.println(Thread.currentThread().getName()+"发射-->"+1);
+                e.onSuccess(1);
+            }
+        })
                 .observeOn(Schedulers.computation())
                 .map(new Function<Integer, Integer>() {
                     @Override
@@ -424,4 +289,5 @@ public class SingleCompletableMaybeDemo {
                     }
                 });
     }
+
 }
