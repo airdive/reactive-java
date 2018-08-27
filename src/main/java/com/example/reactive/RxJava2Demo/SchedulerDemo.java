@@ -198,7 +198,7 @@ public class SchedulerDemo {
     }
 
     /**
-     *
+     * single()，单线程实例
      */
     @Test
     public void demo5() {
@@ -230,6 +230,36 @@ public class SchedulerDemo {
                     public void accept(@NonNull Integer i) throws Exception {
                         System.out.println("接收线程:" + Thread.currentThread().getName() + "---->" + "接收:" + i);
                     }
+                });
+    }
+
+    /**
+     * io()，单线程实例
+     * 使用Observable，当上下游运行在不同的线程中时，会产生背压问题，造成数据丢失
+     */
+    @Test
+    public void demo6() {
+        Observable
+                .create(e -> {
+                        for (int i = 0; i < 3; i++) {
+                            System.out.println("发射线程:" + Thread.currentThread().getName() + "---->" + "发射:" + i);
+                            Thread.sleep(1000);
+                            e.onNext(i);
+                        }
+                        e.onComplete();
+                })
+                //指定map操作符在Schedulers.io()的线程中处理数据
+//                .observeOn(Schedulers.io())
+                .map(i -> {
+                        System.out.println("处理线程:" + Thread.currentThread().getName() + "---->" + "处理:" + i);
+                        Thread.sleep(2000);
+                        return i;
+                })
+                //设置观察者在Schedulers.io()的线程中接收数据
+//                .observeOn(Schedulers.io())
+                .subscribe(i -> {
+                    Thread.sleep(1000);
+                    System.out.println("接收线程:" + Thread.currentThread().getName() + "---->" + "接收:" + i);
                 });
     }
 
