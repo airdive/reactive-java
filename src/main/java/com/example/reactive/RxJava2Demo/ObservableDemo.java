@@ -31,17 +31,17 @@ public class ObservableDemo {
         Observable<String> observable = Observable.create(new ObservableOnSubscribe<String>() {
             @Override
             public void subscribe(ObservableEmitter<String> emitter) throws Exception {
-                emitter.onNext("Hello World");
+                emitter.onNext("Hello RxJava");
                 emitter.onComplete();
             }
         });
 
         Observer<String> observer = new Observer<String>() {
+            private Disposable disposable;
             @Override
             public void onSubscribe(Disposable d) {
-
+                disposable = d;
             }
-
             @Override
             public void onNext(String s) {
                 System.out.println(s);

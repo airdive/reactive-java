@@ -1,11 +1,16 @@
 package com.example.reactive.RxJava2Demo;
 
-import io.reactivex.*;
+import io.reactivex.Single;
+import io.reactivex.SingleEmitter;
+import io.reactivex.SingleObserver;
+import io.reactivex.SingleOnSubscribe;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.functions.Function;
 import io.reactivex.schedulers.Schedulers;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
+
+import java.util.concurrent.CountDownLatch;
 
 /**
  * @description : Single测试
@@ -92,6 +97,7 @@ public class SingleDemo {
 
     /**
      * 使用map操作符，设置Scheduler
+     * 当为被观察者设置Scheduler时，被观察者和观察者将以守护线程的形式运行，当主线程结束，守护线程也将关闭
      */
     @Test
     public void single_scheduler() {
@@ -100,6 +106,7 @@ public class SingleDemo {
                     @Override
                     public void subscribe(SingleEmitter<Integer> e) throws Exception {
                         System.out.println(Thread.currentThread().getName()+"-----发射");
+                        Thread.sleep(5000);
                         e.onSuccess(0);
                     }
                 })
@@ -129,6 +136,62 @@ public class SingleDemo {
                         e.printStackTrace();
                     }
                 });
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 使用CountDownLatch同步主线程和守护进程
+     */
+    @Test
+    public void single_scheduler_countdown() {
+        final CountDownLatch count = new CountDownLatch(1);
+        Single
+                .create(new SingleOnSubscribe<Integer>() {
+                    @Override
+                    public void subscribe(SingleEmitter<Integer> e) throws Exception {
+                        System.out.println(Thread.currentThread().getName()+"-----发射");
+                        Thread.sleep(5000);
+                        e.onSuccess(0);
+                    }
+                })
+                .subscribeOn(Schedulers.io())
+                .observeOn(Schedulers.newThread())
+                .map(new Function<Integer, Integer>() {
+                    @Override
+                    public Integer apply(Integer integer) throws Exception {
+                        System.out.println(Thread.currentThread().getName()+"处理-----"+integer);
+
+                        return integer+1;
+                    }
+                })
+                .observeOn(Schedulers.newThread())
+                .subscribe(new SingleObserver<Integer>() {
+                    @Override
+                    public void onSubscribe(Disposable d) {
+
+                    }
+
+                    @Override
+                    public void onSuccess(Integer integer) {
+                        System.out.println(Thread.currentThread().getName()+"接收-----"+integer);
+                        count.countDown();
+                    }
+
+                    @Override
+                    public void onError(Throwable e) {
+                        count.countDown();
+                        e.printStackTrace();
+                    }
+                });
+        try {
+            count.await();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 
 }

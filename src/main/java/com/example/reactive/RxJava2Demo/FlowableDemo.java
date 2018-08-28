@@ -3,6 +3,7 @@ package com.example.reactive.RxJava2Demo;
 import io.reactivex.*;
 import io.reactivex.annotations.NonNull;
 import io.reactivex.disposables.Disposable;
+import io.reactivex.functions.Action;
 import io.reactivex.functions.Consumer;
 import io.reactivex.functions.Function;
 import io.reactivex.schedulers.Schedulers;
@@ -10,6 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+
+import java.util.concurrent.CountDownLatch;
 
 /**
  * @description : Flowable
@@ -53,7 +56,7 @@ public class FlowableDemo {
      * Observable不支持背压
      */
     @Test
-    public void demo() {
+    public void observable_not_backpressure() {
         Observable
                 .create(new ObservableOnSubscribe<Integer>() {
                     @Override
@@ -125,15 +128,18 @@ public class FlowableDemo {
                 .create(new FlowableOnSubscribe<Integer>() {
                     @Override
                     public void subscribe(FlowableEmitter<Integer> e) throws Exception {
-                        for (int i = 1; i <= 129; i++) {
+                        for (int i = 1; i <= 200; i++) {
                             System.out.println("发射--"+i);
                             e.onNext(i);
+                            try {
+                                Thread.sleep(100);//每隔100毫秒发射一次数据
+                            } catch (Exception ignore) {
+                            }
                         }
                         e.onComplete();
                     }
                 }, BackpressureStrategy.ERROR)
-                .observeOn(Schedulers.newThread())
-                .subscribe(new Subscriber<Integer>() {
+                .subscribe(new FlowableSubscriber<Integer>() {
                     @Override
                     public void onSubscribe(Subscription s) {
                         s.request(Long.MAX_VALUE);
@@ -145,7 +151,7 @@ public class FlowableDemo {
                         } catch (InterruptedException ignore) {
                             log.debug(ignore.getMessage());
                         }
-                        System.out.println(integer);
+                        System.out.println("接收---->"+integer);
                     }
                     @Override
                     public void onError(Throwable t) {
@@ -182,6 +188,7 @@ public class FlowableDemo {
                         e.onComplete();
                     }
                 }, BackpressureStrategy.DROP)
+//                .subscribeOn(Schedulers.io())
                 .observeOn(Schedulers.newThread())
                 .subscribe(new Subscriber<Integer>() {
                     @Override
@@ -290,6 +297,7 @@ public class FlowableDemo {
 
                     }
                 }, BackpressureStrategy.MISSING)
+                .onBackpressureDrop()
                 .observeOn(Schedulers.newThread())
                 .subscribe(new Subscriber<Integer>() {
                     @Override
@@ -321,32 +329,47 @@ public class FlowableDemo {
 
     /**
      * onBackpressureDrop
+     * 当被观察者和观察者运行在同一线程中是，背压策略失效
      */
     @Test
-    public void flowable_onBackpressureDrop() {
+    public void flowable_onBackpressure_singleThread() {
         Flowable.range(0, 500)
                 .onBackpressureDrop()
 //                .subscribeOn(Schedulers.newThread())
 //                .observeOn(Schedulers.newThread())
                 .subscribe(new Consumer<Integer>() {
-                    @Override
-                    public void accept(@NonNull Integer integer) throws Exception {
-                        Thread.sleep(100);
-                        log.info("接收-----------"+integer);
-                    }
-                });
+                               @Override
+                               public void accept(@NonNull Integer integer) throws Exception {
+//                                   Thread.sleep(100);
+                                   log.info(Thread.currentThread().getName() + "接收-----------" + integer);
+
+                               }
+                           }, new Consumer<Throwable>() {
+                               @Override
+                               public void accept(Throwable throwable) throws Exception {
+                               }
+                           },
+                            new Action() {
+                            @Override
+                            public void run() throws Exception {
+                                System.out.println("接受完成");
+                            }
+                        });
     }
 
     /**
      * onBackpressureDrop
+     * 异步缓存池在被观察者和观察者处于不同线程时才会启用
      */
     @Test
-    public void flowable_onBackpressureDrop1() {
-        Flowable.range(0, 200)
+    public void flowable_onBackpressure_multiThread() {
+        final CountDownLatch count = new CountDownLatch(1);
+        Flowable.range(0, 300)
 //                .onBackpressureBuffer()
-                .onBackpressureLatest()
-//                .onBackpressureDrop()
-//                .observeOn(Schedulers.newThread())
+//                .onBackpressureLatest()
+                .onBackpressureDrop()
+                .subscribeOn(Schedulers.io())
+                .observeOn(Schedulers.newThread())
                 .subscribe(new Subscriber<Integer>() {
                     @Override
                     public void onSubscribe(Subscription s) {
@@ -355,7 +378,7 @@ public class FlowableDemo {
                     @Override
                     public void onNext(Integer integer) {
                         try {
-                            Thread.sleep(500);
+                            Thread.sleep(100);
                         } catch (InterruptedException ignore) {
                         }
                         System.out.println(Thread.currentThread().getName() + "接收---------->" + integer);
@@ -363,12 +386,19 @@ public class FlowableDemo {
                     @Override
                     public void onError(Throwable t) {
                         t.printStackTrace();
+                        count.countDown();
                     }
                     @Override
                     public void onComplete() {
                         System.out.println(Thread.currentThread().getName() + "接收----> 完成");
+                        count.countDown();
                     }
                 });
+        try {
+            count.await();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 
 
@@ -604,6 +634,8 @@ public class FlowableDemo {
                         e.onComplete();
                     }
                 }, BackpressureStrategy.BUFFER) //设置背压策略
+//                .subscribeOn(Schedulers.newThread())
+                .observeOn(Schedulers.io())
                 .map(new Function<Integer, String>() {
                     @Override
                     public String apply(Integer integer) throws Exception {
@@ -611,7 +643,6 @@ public class FlowableDemo {
                         return " : "+integer;
                     }
                 })
-//                .subscribeOn(Schedulers.newThread())
                 .observeOn(Schedulers.newThread())
                 .subscribe(new Subscriber<String>() {
                     @Override
@@ -620,14 +651,14 @@ public class FlowableDemo {
                     }
                     @Override
                     public void onNext(String str) {
-                        System.out.println("接收----> " + str);
+                        System.out.println(Thread.currentThread().getName()+"接收----> " + str);
                     }
                     @Override
                     public void onError(Throwable t) {
                     }
                     @Override
                     public void onComplete() {
-                        System.out.println("接收----> 完成");
+                        System.out.println(Thread.currentThread().getName()+"接收----> 完成");
                     }
                 });
     }
@@ -665,7 +696,7 @@ public class FlowableDemo {
                     @Override
                     public void onNext(Integer integer) {
                         try {
-                            Thread.sleep(500);
+                            Thread.sleep(200);
                             System.out.println("接收----------->" + integer);
                             subscription.request(1);//每接收到一条数据增加一条请求量
                         } catch (InterruptedException ignore) {
@@ -700,7 +731,7 @@ public class FlowableDemo {
                     @Override
                     public void onNext(Integer integer) {
                         try {
-                            Thread.sleep(500);
+                            Thread.sleep(100);
                             System.out.println("接收----------->" + integer);
                             subscription.request(1);//每接收到一条数据增加一条请求量
                         } catch (InterruptedException ignore) {
