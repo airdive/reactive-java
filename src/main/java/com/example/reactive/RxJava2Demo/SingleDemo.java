@@ -23,14 +23,13 @@ public class SingleDemo {
 
     /**
      * Single
-     * 只发射一条单一的数据，或者一条异常通知，不能发射完成通知，其中数据与通知只能发射一个。
+     * 只发射一条单一的数据，或者一条异常通知，不能发射完成通知，只会发射第一条数据或异常，其余的会取消。
      *
      * Completable
      * 只发射一条完成通知，或者一条异常通知，不能发射数据，其中完成通知与异常通知只能发射一个
      *
      * Maybe
-     * 可发射一条单一的数据，以及发射一条完成通知，或者一条异常通知，其中完成通知和异常通知只
-     * 能发射一个，发射数据只能在发射完成通知或者异常通知之前，否则发射数据无效。
+     * 可发射一条单一的数据，以及发射一条完成通知，或者一条异常通知，只会发射第一条数据或异常，其余的会取消。
      *
      */
 
@@ -38,12 +37,13 @@ public class SingleDemo {
      * 发射单条数据
      */
     @Test
-    public void single_success() {
+    public void single_success() throws InterruptedException {
         Single
                 .create(new SingleOnSubscribe<Integer>() {
                     @Override
                     public void subscribe(SingleEmitter<Integer> e) throws Exception {
                         e.onSuccess(0);
+                        e.onSuccess(1);
                     }
                 })
                 .subscribe(new SingleObserver<Integer>() {
@@ -59,9 +59,11 @@ public class SingleDemo {
 
                     @Override
                     public void onError(Throwable e) {
+                        System.out.println("异常通知");
                         e.printStackTrace();
                     }
                 });
+        Thread.sleep(2000);
     }
 
     /**
@@ -159,6 +161,7 @@ public class SingleDemo {
                     }
                 })
                 .subscribeOn(Schedulers.io())
+                .subscribeOn(Schedulers.newThread())
                 .observeOn(Schedulers.newThread())
                 .map(new Function<Integer, Integer>() {
                     @Override

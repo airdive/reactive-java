@@ -89,14 +89,13 @@ public class MaybeDemo {
      * 单条数据和完成通知不能同时发射，以先发射的为准
      */
     @Test
-    public void maybe_success_complete() {
+    public void maybe_success_complete() throws InterruptedException {
         Maybe
                 .create(new MaybeOnSubscribe<Integer>() {
                     @Override
                     public void subscribe(MaybeEmitter<Integer> e) throws Exception {
-//                        e.onSuccess(1);
-                        e.onComplete();
                         e.onSuccess(1);
+                        e.onComplete();
                     }
                 })
                 .subscribe(new MaybeObserver<Integer>() {
@@ -120,6 +119,7 @@ public class MaybeDemo {
                         System.out.println("执行完成");
                     }
                 });
+        Thread.sleep(2000);
     }
 
 
@@ -149,6 +149,7 @@ public class MaybeDemo {
 
                     @Override
                     public void onError(Throwable e) {
+                        System.out.println("接收异常通知");
                         e.printStackTrace();
                     }
 

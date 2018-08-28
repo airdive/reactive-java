@@ -120,7 +120,8 @@ public class FlowableDemo {
     }
 
     /**
-     *
+     * ERROR
+     * ERROR策略下，如果放入Flowable的异步缓存池中的数据超限了，则会抛出MissingBackpressureException异常。
      */
     @Test
     public void flowable_error() {
@@ -139,6 +140,7 @@ public class FlowableDemo {
                         e.onComplete();
                     }
                 }, BackpressureStrategy.ERROR)
+                .observeOn(Schedulers.newThread())
                 .subscribe(new FlowableSubscriber<Integer>() {
                     @Override
                     public void onSubscribe(Subscription s) {
