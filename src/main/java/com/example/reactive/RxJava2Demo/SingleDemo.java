@@ -5,6 +5,7 @@ import io.reactivex.SingleEmitter;
 import io.reactivex.SingleObserver;
 import io.reactivex.SingleOnSubscribe;
 import io.reactivex.disposables.Disposable;
+import io.reactivex.functions.Consumer;
 import io.reactivex.functions.Function;
 import io.reactivex.schedulers.Schedulers;
 import lombok.extern.slf4j.Slf4j;
@@ -156,7 +157,7 @@ public class SingleDemo {
                     @Override
                     public void subscribe(SingleEmitter<Integer> e) throws Exception {
                         System.out.println(Thread.currentThread().getName()+"-----发射");
-                        Thread.sleep(5000);
+                        Thread.sleep(2000);
                         e.onSuccess(0);
                     }
                 })
@@ -169,6 +170,12 @@ public class SingleDemo {
                         System.out.println(Thread.currentThread().getName()+"处理-----"+integer);
 
                         return integer+1;
+                    }
+                })
+                .doOnSuccess(new Consumer<Integer>() {
+                    @Override
+                    public void accept(Integer integer) throws Exception {
+                        System.out.println(Thread.currentThread().getName()+"--doOnSuccess->"+integer);
                     }
                 })
                 .observeOn(Schedulers.newThread())
